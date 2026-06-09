@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart'; // Added Firebase Core
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // FirebaseAuth ইমপোর্ট করা হলো
 import 'firebase_options.dart';
 import 'welcome_screen.dart';
+import 'home_page.dart'; // HomePage ইমপোর্ট করা হলো
 
 void main() async {
   // Required to initialize Firebase before the app runs
@@ -50,7 +52,6 @@ class TeaPlusApp extends StatelessWidget {
             borderSide: const BorderSide(color: Color(0xFF2D5A27), width: 2),
           ),
           labelStyle: const TextStyle(color: Colors.grey),
-          // Added error styles for the validation messages you requested
           errorStyle: const TextStyle(color: Colors.red),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -75,8 +76,40 @@ class TeaPlusApp extends StatelessWidget {
         ),
       ),
 
-      // Starting Page
-      home: const WelcomeScreen(),
+      // starting page হিসেবে AuthWrapper সেট করা হলো যা সেশন চেক করবে
+      home: const AuthWrapper(),
+    );
+  }
+}
+
+// লগইন সেশন অটো-চেক করার জন্য রিয়েল-টাইম র্যাপার উইজেট
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(), // ইউজারের লগইন স্টেট পর্যবেক্ষণ করে
+      builder: (context, snapshot) {
+        // ফায়ারবেস ডেটা কানেক্ট বা লোড হতে সময় নিলে প্রোগ্রেস বার দেখাবে
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2D5A27)),
+              ),
+            ),
+          );
+        }
+
+        // ইউজার যদি লগইন করা থাকে এবং তার ইমেইল ভেরিফাইড থাকে, তবে সরাসরি HomePage
+        if (snapshot.hasData && snapshot.data!.emailVerified) {
+          return const HomePage();
+        }
+
+        // ইউজার লগইন না থাকলে অথবা নতুন হলে WelcomeScreen দেখাবে
+        return const WelcomeScreen();
+      },
     );
   }
 }

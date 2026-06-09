@@ -18,8 +18,16 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
-  String? _emailError;
-  String? _passwordError;
+
+  // সাইন-আপ ও লগইন পেজের ম্যাচিং স্ট্রং Regex
+  final RegExp _emailRegex = RegExp(r'^[a-zA-Z][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   void _navigateToHome() {
     Navigator.pushAndRemoveUntil(
@@ -29,36 +37,171 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Future<void> _login() async {
-    setState(() {
-      _emailError = null;
-      _passwordError = null;
-    });
+  // পাসওয়ার্ড রিসেট মেইল পাঠানোর মেথড
+  Future<void> _resetPassword(String email, BuildContext dialogContext) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+      if (mounted) {
+        Navigator.pop(dialogContext); // ডায়ালগটি বন্ধ করবে
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("A password reset link has been sent to your email!"),
+            backgroundColor: Color(0xFF2D5A27),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String msg = "Something went wrong. Please try again.";
+      if (e.code == 'user-not-found') {
+        msg = "This email is not registered with us.";
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
 
+  // Forgot Password ডায়ালগ উইজেট
+  void _showForgotPasswordDialog() {
+    final TextEditingController resetEmailController = TextEditingController();
+    final GlobalKey<FormState> dialogFormKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          "Reset Password",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
+        content: Form(
+          key: dialogFormKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Enter your email address below and we will send you a link to reset your password.",
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: resetEmailController,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) return "Please enter your email";
+                  if (!_emailRegex.hasMatch(value.trim())) return "Enter a valid email address";
+                  return null;
+                },
+                decoration: InputDecoration(
+                  hintText: "Enter your email",
+                  prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  isDense: true,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF2D5A27)),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.redAccent),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2D5A27),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              if (dialogFormKey.currentState!.validate()) {
+                _resetPassword(resetEmailController.text, context);
+              }
+            },
+            child: const Text("Reset", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
       try {
-        await _auth.signInWithEmailAndPassword(
+        UserCredential userCredential = await _auth.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
+
+        if (userCredential.user != null && !userCredential.user!.emailVerified) {
+          await userCredential.user!.sendEmailVerification();
+          await _auth.signOut();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Your email is not verified. A new link has been sent. Please verify first!"),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+
         _navigateToHome();
       } on FirebaseAuthException catch (e) {
-        setState(() {
-          if (e.code == 'user-not-found' || e.code == 'invalid-email') {
-            _emailError = "This email is not registered or invalid";
-          } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
-            _passwordError = "Incorrect password. Please try again.";
-          } else {
-            _emailError = "Login failed. Please check your email.";
-          }
-        });
+        String errorMessage = "Login failed. Please check your credentials.";
+
+        if (e.code == 'user-not-found' || e.code == 'invalid-email' || e.code == 'invalid-credential') {
+          errorMessage = "Incorrect email or password. Please try again.";
+        } else if (e.code == 'wrong-password') {
+          errorMessage = "Incorrect password. Please try again.";
+        } else if (e.code == 'network-request-failed') {
+          errorMessage = "No internet connection. Please check your network.";
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent),
+          );
+        }
       }
     }
   }
 
   Future<void> _signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) return;
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -88,7 +231,6 @@ class _LoginPageState extends State<LoginPage> {
             child: Column(
               children: [
                 const SizedBox(height: 50),
-                // আপনি চাইলে এই লোগোটিও অ্যাসেট এ পরিবর্তন করতে পারেন
                 Image.asset(
                   "images/login.png",
                   height: 90,
@@ -105,7 +247,11 @@ class _LoginPageState extends State<LoginPage> {
                   label: "Email Address",
                   hint: "Enter your email",
                   icon: Icons.email_outlined,
-                  errorText: _emailError,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return "Please enter your email";
+                    if (!_emailRegex.hasMatch(value.trim())) return "Enter a valid email (e.g. name@domain.com)";
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 20),
                 _buildTextField(
@@ -115,14 +261,18 @@ class _LoginPageState extends State<LoginPage> {
                   icon: Icons.lock_outline,
                   isPassword: true,
                   obscureText: _obscurePassword,
-                  errorText: _passwordError,
                   onToggle: () => setState(() => _obscurePassword = !_obscurePassword),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return "Please enter your password";
+                    if (value.length < 6) return "Password must be at least 6 characters";
+                    return null;
+                  },
                 ),
 
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: _showForgotPasswordDialog, // ফিক্সড: এখন বাটনে ক্লিক করলে মেথডটি কল হবে
                     child: const Text("Forgot Password?", style: TextStyle(color: Color(0xFF2D5A27))),
                   ),
                 ),
@@ -156,16 +306,14 @@ class _LoginPageState extends State<LoginPage> {
                     Expanded(
                       child: GestureDetector(
                         onTap: _signInWithGoogle,
-                        child: _socialButton("Google", "images/Google logo.png"), // Updated to Asset
+                        child: _socialButton("Google", "images/Google logo.png"),
                       ),
                     ),
                     const SizedBox(width: 15),
                     Expanded(
                       child: GestureDetector(
-                        onTap: () {
-                          // Facebook login logic
-                        },
-                        child: _socialButton("Facebook", "images/Facebook logo.png"), // Updated to Asset
+                        onTap: () {},
+                        child: _socialButton("Facebook", "images/Facebook logo.png"),
                       ),
                     ),
                   ],
@@ -197,45 +345,50 @@ class _LoginPageState extends State<LoginPage> {
     required IconData icon,
     bool isPassword = false,
     bool obscureText = false,
-    String? errorText,
     VoidCallback? onToggle,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: errorText != null ? Colors.red : Colors.grey.shade200),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              TextFormField(
-                controller: controller,
-                obscureText: obscureText,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                  hintText: hint,
-                  prefixIcon: Icon(icon, size: 20),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 35),
-                  suffixIcon: isPassword
-                      ? GestureDetector(onTap: onToggle, child: Icon(obscureText ? Icons.visibility_off : Icons.visibility, size: 20))
-                      : null,
-                ),
-              ),
-            ],
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        ),
+        TextFormField(
+          controller: controller,
+          obscureText: obscureText,
+          validator: validator,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            hintText: hint,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+            prefixIcon: Icon(icon, size: 20),
+            prefixIconConstraints: const BoxConstraints(minWidth: 40),
+            suffixIcon: isPassword
+                ? GestureDetector(onTap: onToggle, child: Icon(obscureText ? Icons.visibility_off : Icons.visibility, size: 20))
+                : null,
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF2D5A27)),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red, width: 1.5),
+            ),
+            errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
           ),
         ),
-        if (errorText != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 5, left: 5),
-            child: Text(errorText, style: const TextStyle(color: Colors.red, fontSize: 12)),
-          ),
       ],
     );
   }
@@ -251,7 +404,7 @@ class _LoginPageState extends State<LoginPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(assetPath, height: 20), // Updated to Image.asset
+          Image.asset(assetPath, height: 20),
           const SizedBox(width: 10),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],

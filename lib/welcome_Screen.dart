@@ -9,7 +9,7 @@ class WelcomeScreen extends StatelessWidget {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. Background Image
+
           Positioned.fill(
             child: Image.asset(
               'images/welcome.png',
@@ -17,7 +17,7 @@ class WelcomeScreen extends StatelessWidget {
             ),
           ),
 
-          // 2. Optimized Gradient Overlay
+
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -34,19 +34,19 @@ class WelcomeScreen extends StatelessWidget {
             ),
           ),
 
-          // 3. Main Content
+
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 30.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Top Branding Section - Now Centered
+
                   Expanded(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center, // Brings content to center
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Stack used to position GIF on top corner of "Plus"
+
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
@@ -74,10 +74,10 @@ class WelcomeScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
-                            // Positioning the GIF on the top-right corner of "Plus"
+
                             Positioned(
-                              top: -45, // Adjust this to move up/down
-                              right: -40, // Adjust this to move left/right
+                              top: -45,
+                              right: -40,
                               child: ColorFiltered(
                                 colorFilter: const ColorFilter.mode(
                                   Colors.white,

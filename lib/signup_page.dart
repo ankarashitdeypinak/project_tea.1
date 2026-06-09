@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -22,8 +23,27 @@ class _SignupPageState extends State<SignupPage> {
 
   bool _obsPass = true;
   bool _obsConfirm = true;
+  Timer? _verificationTimer;
+
+  // স্ট্রং Regex: অবশ্যই অক্ষর দিয়ে শুরু হতে হবে এবং সঠিক ডোমেইন (.com, .org ইত্যাদি) থাকতে হবে
+  final RegExp _emailRegex = RegExp(r'^[a-zA-Z][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+
+  // বাংলাদেশি ফোন নম্বরের Regex (01 দিয়ে শুরু এবং মোট ১১ ডিজিট)
+  final RegExp _phoneRegex = RegExp(r'^01[3-9]\d{8}$');
+
+  @override
+  void dispose() {
+    _verificationTimer?.cancel();
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
 
   void _navigateToHome() {
+    _verificationTimer?.cancel();
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const HomePage()),
@@ -32,22 +52,92 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> _signUp() async {
+    // এই .validate() এখন সমস্ত ফিল্ডের ভ্যালিডেশন চেক করবে এবং ভুল থাকলে আটকে দেবে
     if (_formKey.currentState!.validate()) {
       try {
-        await _auth.createUserWithEmailAndPassword(
+        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passController.text.trim(),
         );
-        _navigateToHome();
+
+        if (userCredential.user != null) {
+          await userCredential.user!.sendEmailVerification();
+
+          if (mounted) {
+            _showVerificationWaitingDialog();
+          }
+
+          _verificationTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+            User? user = _auth.currentUser;
+            await user?.reload();
+
+            if (user != null && user.emailVerified) {
+              timer.cancel();
+              if (mounted) {
+                Navigator.pop(context);
+                _navigateToHome();
+              }
+            }
+          });
+        }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
 
+  void _showVerificationWaitingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.email_outlined, color: Color(0xFF2D5A27)),
+            SizedBox(width: 10),
+            Text("Verify Your Email"),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "A verification link has been sent to:\n${_emailController.text.trim()}",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 25),
+            const CircularProgressIndicator(color: Color(0xFF2D5A27)),
+            const SizedBox(height: 20),
+            const Text(
+              "Please check your email inbox/spam folder and click the link. We will automatically take you to Home Page once verified.",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              _verificationTimer?.cancel();
+              await _auth.signOut();
+              if (mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Cancel", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) return;
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -88,13 +178,21 @@ class _SignupPageState extends State<SignupPage> {
 
                 const SizedBox(height: 30),
 
-                _buildField("Full Name", "Enter full name", Icons.person_outline, controller: _nameController),
+                _buildField(
+                  "Full Name", "Enter full name", Icons.person_outline,
+                  controller: _nameController,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return "Please enter your name";
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 15),
                 _buildField(
                     "Email Address", "Enter your email", Icons.email_outlined,
                     controller: _emailController,
                     validator: (value) {
-                      if (value == null || !value.contains('@') || !value.contains('.')) return "Please enter a valid email";
+                      if (value == null || value.trim().isEmpty) return "Please enter your email";
+                      if (!_emailRegex.hasMatch(value.trim())) return "Enter a valid email";
                       return null;
                     }
                 ),
@@ -103,7 +201,8 @@ class _SignupPageState extends State<SignupPage> {
                     "Phone Number", "Enter phone number", Icons.phone_outlined,
                     controller: _phoneController,
                     validator: (value) {
-                      if (value == null || value.length < 10) return "Please enter a valid phone number";
+                      if (value == null || value.trim().isEmpty) return "Please enter your phone number";
+                      if (!_phoneRegex.hasMatch(value.trim())) return "Enter a valid phone number";
                       return null;
                     }
                 ),
@@ -114,7 +213,11 @@ class _SignupPageState extends State<SignupPage> {
                   isPass: true,
                   obs: _obsPass,
                   onTap: () => setState(() => _obsPass = !_obsPass),
-                  validator: (value) => (value != null && value.length < 6) ? "Min 6 characters" : null,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return "Please enter a password";
+                    if (value.length < 6) return "Min 6 characters required";
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 15),
                 _buildField(
@@ -123,7 +226,11 @@ class _SignupPageState extends State<SignupPage> {
                   isPass: true,
                   obs: _obsConfirm,
                   onTap: () => setState(() => _obsConfirm = !_obsConfirm),
-                  validator: (value) => (value != _passController.text) ? "Passwords do not match" : null,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return "Please confirm your password";
+                    if (value != _passController.text) return "Passwords do not match";
+                    return null;
+                  },
                 ),
 
                 const SizedBox(height: 30),
@@ -155,12 +262,15 @@ class _SignupPageState extends State<SignupPage> {
                     Expanded(
                       child: GestureDetector(
                         onTap: _signInWithGoogle,
-                        child: _socialBtn("Google", "images/Google logo.png"), // Updated to Asset
+                        child: _socialBtn("Google", "images/Google logo.png"),
                       ),
                     ),
                     const SizedBox(width: 15),
                     Expanded(
-                      child: _socialBtn("Facebook", "images/Facebook logo.png"), // Updated to Asset
+                      child: GestureDetector(
+                        onTap: () {},
+                        child: _socialBtn("Facebook", "images/Facebook logo.png"),
+                      ),
                     ),
                   ],
                 ),
@@ -184,33 +294,50 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
+  // কাস্টম উইজেট যা এরর মেসেজ আসলে ডিজাইন ঠিক রাখবে
   Widget _buildField(String label, String hint, IconData icon, {required TextEditingController controller, bool isPass = false, bool obs = false, VoidCallback? onTap, String? Function(String?)? validator}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          TextFormField(
-            controller: controller,
-            obscureText: obs,
-            validator: validator,
-            decoration: InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              hintText: hint,
-              prefixIcon: Icon(icon, size: 20),
-              prefixIconConstraints: const BoxConstraints(minWidth: 35),
-              suffixIcon: isPass ? GestureDetector(onTap: onTap, child: Icon(obs ? Icons.visibility_off : Icons.visibility, size: 20)) : null,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        ),
+        TextFormField(
+          controller: controller,
+          obscureText: obs,
+          validator: validator, // ভ্যালিডেটর পারফেক্টলি লিংক করা হয়েছে
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            hintText: hint,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+            prefixIcon: Icon(icon, size: 20),
+            prefixIconConstraints: const BoxConstraints(minWidth: 40),
+            suffixIcon: isPass ? GestureDetector(onTap: onTap, child: Icon(obs ? Icons.visibility_off : Icons.visibility, size: 20)) : null,
+            // সাধারণ অবস্থার বর্ডার ডিজাইন
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
             ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF2D5A27)),
+            ),
+            // যখন এরর বা ভুল ইনপুট আসবে তখন এই ডিজাইনটি শো করবে
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 1),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.red, width: 1.5),
+            ),
+            errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -225,7 +352,7 @@ class _SignupPageState extends State<SignupPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(assetPath, height: 20), // Updated to Image.asset
+          Image.asset(assetPath, height: 20),
           const SizedBox(width: 10),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
