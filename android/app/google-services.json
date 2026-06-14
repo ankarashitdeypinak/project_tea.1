@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "518415891677-lle81necburhchfb5ffa0cp9lbreeiv0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.teapulse",
+            "certificate_hash": "b0b8e6847d1e05b99b87109df22d475cf63c5d1d"
+          }
+        },
+        {
           "client_id": "518415891677-hdn13qvrekgsbvrflidrjc25mvj35l3a.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +37,13 @@
             {
               "client_id": "518415891677-hdn13qvrekgsbvrflidrjc25mvj35l3a.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "518415891677-bmm2ha5l7es6le5manlbjm850rfs89kh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.teapulse"
+              }
             }
           ]
         }
