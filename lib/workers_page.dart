@@ -1,10 +1,44 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+class WorkerModel {
+  final String id;
+  final String name;
+  final String phone;
+  final String email;
+  final String department;
+  final String position;
+  final DateTime joiningDate;
+  final String waterTarget;
+  final String status;
+  final String? imagePath;
+
+  WorkerModel({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.department,
+    required this.position,
+    required this.joiningDate,
+    required this.waterTarget,
+    required this.status,
+    this.imagePath,
+  });
+}
 
 class WorkersPage extends StatefulWidget {
-  final String totalWorkers;
   final bool isDarkMode;
+  final List<WorkerModel> registeredWorkers;
+  final ValueChanged<List<WorkerModel>> onWorkersUpdated;
 
-  const WorkersPage({super.key, required this.totalWorkers, required this.isDarkMode});
+  const WorkersPage({
+    super.key,
+    required this.isDarkMode,
+    required this.registeredWorkers,
+    required this.onWorkersUpdated,
+  });
 
   @override
   State<WorkersPage> createState() => _WorkersPageState();
@@ -14,37 +48,14 @@ class _WorkersPageState extends State<WorkersPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
-  void _showAddWorkerDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-        title: Text("Add New Worker", style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black),
-              decoration: const InputDecoration(labelText: "Worker Name", labelStyle: TextStyle(color: Colors.grey)),
-            ),
-            TextField(
-              style: TextStyle(color: widget.isDarkMode ? Colors.white : Colors.black),
-              decoration: const InputDecoration(labelText: "Section (e.g., North Garden)", labelStyle: TextStyle(color: Colors.grey)),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Add", style: TextStyle(color: Color(0xFF2D5A27), fontWeight: FontWeight.bold))),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final textColor = widget.isDarkMode ? Colors.white : Colors.black;
-    int count = int.tryParse(widget.totalWorkers) ?? 5;
+
+    final filteredWorkers = widget.registeredWorkers.where((worker) {
+      return worker.name.toLowerCase().contains(_searchQuery) ||
+          worker.id.toLowerCase().contains(_searchQuery);
+    }).toList();
 
     return Padding(
       padding: const EdgeInsets.all(20.0),
@@ -57,12 +68,26 @@ class _WorkersPageState extends State<WorkersPage> {
               Text("Workers Directory", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor)),
               IconButton(
                 icon: const Icon(Icons.person_add, color: Color(0xFF2D5A27), size: 28),
-                onPressed: _showAddWorkerDialog,
+                onPressed: () async {
+                  final WorkerModel? newWorker = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AddWorkerScreen(isDarkMode: widget.isDarkMode),
+                    ),
+                  );
+
+                  if (newWorker != null) {
+                    setState(() {
+                      widget.registeredWorkers.add(newWorker);
+                      widget.onWorkersUpdated(widget.registeredWorkers);
+                    });
+                  }
+                },
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text("Total Active Workers: ${widget.totalWorkers}", style: const TextStyle(color: Colors.grey, fontSize: 16)),
+          Text("Total Active Workers: ${widget.registeredWorkers.length}", style: const TextStyle(color: Colors.grey, fontSize: 16)),
           const SizedBox(height: 15),
           TextField(
             controller: _searchController,
@@ -79,47 +104,151 @@ class _WorkersPageState extends State<WorkersPage> {
           ),
           const Divider(height: 30),
           Expanded(
-            child: ListView.builder(
-              itemCount: count,
+            child: filteredWorkers.isEmpty
+                ? Center(
+              child: Text(
+                _searchQuery.isEmpty ? "No workers added yet!" : "No workers match your search.",
+                style: const TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+            )
+                : ListView.builder(
+              itemCount: filteredWorkers.length,
               itemBuilder: (context, index) {
-                String workerName = "Worker #${index + 101}";
-                if (_searchQuery.isNotEmpty && !workerName.toLowerCase().contains(_searchQuery)) {
-                  return const SizedBox.shrink();
-                }
+                final worker = filteredWorkers[index];
                 return Card(
                   color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   child: ListTile(
-                    leading: const CircleAvatar(backgroundColor: Color(0xFF2D5A27), child: Icon(Icons.person, color: Colors.white)),
-                    title: Text(workerName, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
-                    subtitle: const Text("Section: North Garden", style: TextStyle(color: Colors.grey)),
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFF2D5A27),
+                      backgroundImage: worker.imagePath != null ? FileImage(File(worker.imagePath!)) : null,
+                      child: worker.imagePath == null ? const Icon(Icons.person, color: Colors.white) : null,
+                    ),
+                    title: Text(worker.name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+                    subtitle: Text("ID: ${worker.id} • ${worker.position}", style: const TextStyle(color: Colors.grey)),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                    onTap: () {
-                      showModalBottomSheet(
-                        context: context,
-                        backgroundColor: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                        builder: (context) => Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(workerName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
-                              const SizedBox(height: 10),
-                              Text("ID: WP${index + 1001}", style: const TextStyle(color: Colors.grey)),
-                              Text("Section: North Garden", style: const TextStyle(color: Colors.grey)),
-                              Text("Status: Active", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
                   ),
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class AddWorkerScreen extends StatefulWidget {
+  final bool isDarkMode;
+  const AddWorkerScreen({super.key, required this.isDarkMode});
+
+  @override
+  State<AddWorkerScreen> createState() => _AddWorkerScreenState();
+}
+
+class _AddWorkerScreenState extends State<AddWorkerScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _idController = TextEditingController();
+  final _targetController = TextEditingController();
+
+  String _selectedDept = "Production";
+  String _selectedPosition = "Plucker";
+  String _selectedStatus = "Active";
+
+  @override
+  Widget build(BuildContext context) {
+    final inputBg = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey.shade100;
+    final textThemeColor = widget.isDarkMode ? Colors.white : Colors.black;
+
+    return Scaffold(
+      backgroundColor: widget.isDarkMode ? const Color(0xFF121212) : Colors.white,
+      appBar: AppBar(
+        title: const Text("Add New Worker", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF2D5A27),
+        foregroundColor: Colors.white,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildTextField(_nameController, "Full Name", inputBg, textThemeColor),
+              const SizedBox(height: 12),
+              _buildTextField(_idController, "Worker ID (e.g. WG1050)", inputBg, textThemeColor),
+              const SizedBox(height: 12),
+              _buildTextField(_phoneController, "Phone Number", inputBg, textThemeColor, keyboardType: TextInputType.phone),
+              const SizedBox(height: 12),
+              _buildTextField(_emailController, "Email Address (Optional)", inputBg, textThemeColor, keyboardType: TextInputType.emailAddress),
+              const SizedBox(height: 12),
+              _buildTextField(_targetController, "Daily Water Target (Liters)", inputBg, textThemeColor, keyboardType: TextInputType.number),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedDept,
+                dropdownColor: inputBg,
+                style: TextStyle(color: textThemeColor),
+                decoration: InputDecoration(filled: true, fillColor: inputBg, labelText: "Department"),
+                items: ["Production", "North Garden", "South Garden", "Irrigation"].map((String value) {
+                  return DropdownMenuItem<String>(value: value, child: Text(value));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedDept = val!),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _selectedPosition,
+                dropdownColor: inputBg,
+                style: TextStyle(color: textThemeColor),
+                decoration: InputDecoration(filled: true, fillColor: inputBg, labelText: "Position"),
+                items: ["Plucker", "Water Supervisor", "Field Laborer"].map((String value) {
+                  return DropdownMenuItem<String>(value: value, child: Text(value));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedPosition = val!),
+              ),
+              const SizedBox(height: 25),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2D5A27),
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  if (_nameController.text.isNotEmpty && _idController.text.isNotEmpty) {
+                    final worker = WorkerModel(
+                      id: _idController.text,
+                      name: _nameController.text,
+                      phone: _phoneController.text,
+                      email: _emailController.text,
+                      department: _selectedDept,
+                      position: _selectedPosition,
+                      joiningDate: DateTime.now(),
+                      waterTarget: _targetController.text.isNotEmpty ? _targetController.text : "15",
+                      status: _selectedStatus,
+                    );
+                    Navigator.pop(context, worker);
+                  }
+                },
+                child: const Text("Save Worker Details", style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String hint, Color fill, Color text, {TextInputType keyboardType = TextInputType.text}) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: TextStyle(color: text, fontSize: 15),
+      decoration: InputDecoration(
+        labelText: hint,
+        filled: true,
+        fillColor: fill,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

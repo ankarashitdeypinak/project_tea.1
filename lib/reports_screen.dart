@@ -1,188 +1,155 @@
 import 'package:flutter/material.dart';
 
-/// =========================================================================
-/// 1. REPORTS SCREEN (Matching WhatsApp Image 2026-06-08 at 11.38.16 PM.jpeg)
-/// =========================================================================
 class ReportsScreen extends StatelessWidget {
-  const ReportsScreen({super.key});
+  final List<dynamic> attendanceList;
+  final List<Map<String, dynamic>> collectionsList;
+  final double morningWater;
+  final double afternoonWater;
+  final double savedWater;
+
+  const ReportsScreen({
+    super.key,
+    required this.attendanceList,
+    required this.collectionsList,
+    required this.morningWater,
+    required this.afternoonWater,
+    required this.savedWater,
+  });
+
+  // ১. উপস্থিত কর্মীর সংখ্যা ও হার ক্যালকুলেশন
+  String _getAttendanceSummary() {
+    if (attendanceList.isEmpty) return "No attendance records recorded today.";
+    int presentCount = attendanceList.where((a) => a.status == 'Present').length;
+    double percentage = (presentCount / attendanceList.length) * 100;
+    return "Present: $presentCount / ${attendanceList.length} workers (${percentage.toStringAsFixed(1)}% Active Rate)";
+  }
+
+  // ২. মোট কাজের ঘণ্টা হিসাব (উপস্থিত কর্মীদের ৮ ঘণ্টা করে স্ট্যান্ডার্ড ধরে)
+  String _getCalculatedWorkHours() {
+    int presentCount = attendanceList.where((a) => a.status == 'Present').length;
+    int totalHours = presentCount * 8;
+    return "Total: $totalHours Productive Hours tracked today (Standard 8 Hours/Day scale).";
+  }
+
+  // ৩. সংগৃহীত চা-পাতার মোট ওজন হিসাব
+  String _getTotalLeafWeight() {
+    if (collectionsList.isEmpty) return "No crop collections registered today.";
+    double totalWeight = 0.0;
+    for (var col in collectionsList) {
+      totalWeight += (col['weight'] as num).toDouble();
+    }
+    return "Total Harvested: ${totalWeight.toStringAsFixed(1)} kg from ${collectionsList.length} entries.";
+  }
+
+  // ৪. আনুমানিক মজুরি বা পারফরম্যান্স ইনডেক্স বিতরণ (ডেমো রেট ৫০০ টাকা/দিন ধরে ডাইনামিক)
+  String _getWageDistribution() {
+    int presentCount = attendanceList.where((a) => a.status == 'Present').length;
+    double estimatedPayout = presentCount * 500.0; // Standard baseline daily wage matrix
+    return "Estimated Daily Compensation Matrix: ৳${estimatedPayout.toStringAsFixed(0)} distributed.";
+  }
+
+  // ৫. প্রোডাক্টিভিটি ইনডেক্স বা পারফরম্যান্স অ্যানালিসিস
+  String _getProductivityIndex() {
+    if (collectionsList.isEmpty || attendanceList.isEmpty) return "Awaiting sufficient metrics to run optimization models.";
+    double totalWeight = 0.0;
+    for (var col in collectionsList) {
+      totalWeight += (col['weight'] as num).toDouble();
+    }
+    int presentCount = attendanceList.where((a) => a.status == 'Present').length;
+    if (presentCount == 0) return "Zero active labor factor to compute productivity index.";
+
+    double avgYieldPerWorker = totalWeight / presentCount;
+    return "Average Yield Index: ${avgYieldPerWorker.toStringAsFixed(1)} kg per active worker.";
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBFBF9),
       appBar: AppBar(
-        title: const Text(
-          'Reports',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-            fontSize: 20,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFFBFBF9),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Centralized Dynamic Reports Hub', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF2D5A27),
+        foregroundColor: Colors.white,
       ),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+        padding: const EdgeInsets.all(16.0),
         children: [
-          _buildReportTile(
-            context,
-            icon: Icons.calendar_today_outlined,
-            bgColor: const Color(0xFFF3E8FF),
-            iconColor: Colors.purple,
-            title: 'Attendance Report',
-            subtitle: 'Daily, Weekly, Monthly',
+          _buildCardReportTile(
+              context,
+              "Live Field Attendance Sheet Status Log",
+              _getAttendanceSummary()
           ),
-          _buildReportTile(
-            context,
-            icon: Icons.access_time,
-            bgColor: const Color(0xFFE0F2FE),
-            iconColor: Colors.blue,
-            title: 'Work Hours Report',
-            subtitle: 'Detailed work hours and overtime',
+          _buildCardReportTile(
+              context,
+              "Calculated Work Hours Metrics Analysis",
+              _getCalculatedWorkHours()
           ),
-          _buildReportTile(
-            context,
-            icon: Icons.assignment_outlined,
-            bgColor: const Color(0xFFFEF3C7),
-            iconColor: Colors.orange,
-            title: 'Leaf Collection Report',
-            subtitle: 'Daily, Weekly, Monthly',
+          _buildCardReportTile(
+              context,
+              "Crop Leaf Yield Harvest Weight Report",
+              _getTotalLeafWeight()
           ),
-          _buildReportTile(
-            context,
-            icon: Icons.request_quote_outlined,
-            bgColor: const Color(0xFFE0E7FF),
-            iconColor: Colors.indigo,
-            title: 'Wage Report',
-            subtitle: 'Payments and earnings',
+          _buildCardReportTile(
+              context,
+              "Live Structured Compensation Wage Distributions",
+              _getWageDistribution()
           ),
-          _buildReportTile(
-            context,
-            icon: Icons.opacity,
-            bgColor: const Color(0xFFE0F2FE),
-            iconColor: Colors.lightBlue,
-            title: 'Water Usage Report',
-            subtitle: 'Usage and savings',
+          _buildCardReportTile(
+              context,
+              "Irrigation Water Management Efficiency Matrix",
+              "Morning Flow: ${morningWater.toStringAsFixed(1)} L | Afternoon Flow: ${afternoonWater.toStringAsFixed(1)} L | Saved Remaining: ${savedWater.toStringAsFixed(1)} L"
           ),
-          _buildReportTile(
-            context,
-            icon: Icons.leaderboard_outlined,
-            bgColor: const Color(0xFFDCFCE7),
-            iconColor: Colors.green,
-            title: 'Productivity Report',
-            subtitle: 'Overall productivity analysis',
+          _buildCardReportTile(
+              context,
+              "Organizational Unit Productivity Index",
+              _getProductivityIndex()
           ),
         ],
       ),
     );
   }
 
-  Widget _buildReportTile(
-      BuildContext context, {
-        required IconData icon,
-        required Color bgColor,
-        required Color iconColor,
-        required String title,
-        required String subtitle,
-      }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            spreadRadius: 1,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: iconColor, size: 24),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-            color: Colors.black87,
-          ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4.0),
-          child: Text(
-            subtitle,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-          ),
-        ),
-        trailing: Icon(Icons.chevron_right, color: Colors.grey.shade400),
+  Widget _buildCardReportTile(BuildContext context, String title, String dataSubtitle) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 10), // কার্ডগুলোর গ্যাপ বাড়ানো হয়েছে
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: InkWell(
         onTap: () {
-          // Click korle ekhon eita specific report detail page-e niye jabe
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ReportDetailPage(reportTitle: title),
+          // কার্ডে ক্লিক করলে যা ঘটবে (অ্যাকশন ফিক্সড)
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("$title\n$dataSubtitle"),
+              backgroundColor: const Color(0xFF2D5A27),
+              duration: const Duration(seconds: 3),
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// =========================================================================
-/// 2. DYNAMIC REPORT DETAIL SCREEN (Click korle ja open hobe)
-/// =========================================================================
-class ReportDetailPage extends StatelessWidget {
-  final String reportTitle;
-
-  const ReportDetailPage({super.key, required this.reportTitle});
-
-  TextAlign? get center => null;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(reportTitle),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.bar_chart_rounded, size: 80, color: Colors.green),
-              const SizedBox(height: 16),
-              Text(
-                '$reportTitle Details',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                textAlign: center,
+          padding: const EdgeInsets.symmetric(vertical: 6.0), // ভেতরের সাইজ বড় করার জন্য প্যাডিং
+          child: ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(10),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Real-time data visualization and charts for $reportTitle will be integrated here.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey, fontSize: 14),
+              child: const Icon(Icons.analytics, color: Color(0xFF2D5A27), size: 32), // আইকন সাইজ বড় করা হয়েছে
+            ),
+            title: Text(
+                title,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black)
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 6.0),
+              child: Text(
+                  dataSubtitle,
+                  style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.3)
               ),
-            ],
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16), // বাটন লুকে দেখানোর জন্য অ্যারো
           ),
         ),
       ),

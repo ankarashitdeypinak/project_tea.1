@@ -37,12 +37,12 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // পাসওয়ার্ড রিসেট মেইল পাঠানোর মেথড
+  // পাসওয়ার্ড রিসেট মেইল পাঠানোর মেথড
   Future<void> _resetPassword(String email, BuildContext dialogContext) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
       if (mounted) {
-        Navigator.pop(dialogContext); // ডায়ালগটি বন্ধ করবে
+        Navigator.pop(dialogContext); // ডায়ালগটি বন্ধ করবে
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("A password reset link has been sent to your email!"),
@@ -63,7 +63,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // Forgot Password ডায়ালগ উইজেট
+  // Forgot Password ডায়ালগ উইজেট
   void _showForgotPasswordDialog() {
     final TextEditingController resetEmailController = TextEditingController();
     final GlobalKey<FormState> dialogFormKey = GlobalKey<FormState>();
@@ -213,9 +213,11 @@ class _LoginPageState extends State<LoginPage> {
       await _auth.signInWithCredential(credential);
       _navigateToHome();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Google Sign-In failed: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Google Sign-In failed: $e"), backgroundColor: Colors.redAccent),
+        );
+      }
     }
   }
 
@@ -272,7 +274,7 @@ class _LoginPageState extends State<LoginPage> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: _showForgotPasswordDialog, // ফিক্সড: এখন বাটনে ক্লিক করলে মেথডটি কল হবে
+                    onPressed: _showForgotPasswordDialog,
                     child: const Text("Forgot Password?", style: TextStyle(color: Color(0xFF2D5A27))),
                   ),
                 ),
@@ -304,15 +306,23 @@ class _LoginPageState extends State<LoginPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: GestureDetector(
-                        onTap: _signInWithGoogle,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () async {
+                          await _signInWithGoogle();
+                        },
                         child: _socialButton("Google", "images/Google logo.png"),
                       ),
                     ),
                     const SizedBox(width: 15),
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () {},
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Facebook Login coming soon!")),
+                          );
+                        },
                         child: _socialButton("Facebook", "images/Facebook logo.png"),
                       ),
                     ),
@@ -404,7 +414,7 @@ class _LoginPageState extends State<LoginPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(assetPath, height: 20),
+          Image.asset(assetPath, height: 20, errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 20),),
           const SizedBox(width: 10),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],

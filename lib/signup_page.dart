@@ -25,10 +25,10 @@ class _SignupPageState extends State<SignupPage> {
   bool _obsConfirm = true;
   Timer? _verificationTimer;
 
-  // স্ট্রং Regex: অবশ্যই অক্ষর দিয়ে শুরু হতে হবে এবং সঠিক ডোমেইন (.com, .org ইত্যাদি) থাকতে হবে
+  // স্ট্রং Regex: অবশ্যই অক্ষর দিয়ে শুরু হতে হবে এবং সঠিক ডোমেইন (.com, .org ইত্যাদি) থাকতে হবে
   final RegExp _emailRegex = RegExp(r'^[a-zA-Z][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
 
-  // বাংলাদেশি ফোন নম্বরের Regex (01 দিয়ে শুরু এবং মোট ১১ ডিজিট)
+  // বাংলাদেশি ফোন নম্বরের Regex (01 দিয়ে শুরু এবং মোট ১১ ডিজিট)
   final RegExp _phoneRegex = RegExp(r'^01[3-9]\d{8}$');
 
   @override
@@ -52,7 +52,6 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> _signUp() async {
-    // এই .validate() এখন সমস্ত ফিল্ডের ভ্যালিডেশন চেক করবে এবং ভুল থাকলে আটকে দেবে
     if (_formKey.currentState!.validate()) {
       try {
         UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
@@ -81,7 +80,9 @@ class _SignupPageState extends State<SignupPage> {
           });
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent));
+        }
       }
     }
   }
@@ -149,9 +150,11 @@ class _SignupPageState extends State<SignupPage> {
       await _auth.signInWithCredential(credential);
       _navigateToHome();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Google Sign-In failed: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Google Sign-In failed: $e"), backgroundColor: Colors.redAccent),
+        );
+      }
     }
   }
 
@@ -260,15 +263,23 @@ class _SignupPageState extends State<SignupPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: GestureDetector(
-                        onTap: _signInWithGoogle,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () async {
+                          await _signInWithGoogle();
+                        },
                         child: _socialBtn("Google", "images/Google logo.png"),
                       ),
                     ),
                     const SizedBox(width: 15),
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () {},
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Facebook Login coming soon!")),
+                          );
+                        },
                         child: _socialBtn("Facebook", "images/Facebook logo.png"),
                       ),
                     ),
@@ -294,7 +305,6 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  // কাস্টম উইজেট যা এরর মেসেজ আসলে ডিজাইন ঠিক রাখবে
   Widget _buildField(String label, String hint, IconData icon, {required TextEditingController controller, bool isPass = false, bool obs = false, VoidCallback? onTap, String? Function(String?)? validator}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,7 +316,7 @@ class _SignupPageState extends State<SignupPage> {
         TextFormField(
           controller: controller,
           obscureText: obs,
-          validator: validator, // ভ্যালিডেটর পারফেক্টলি লিংক করা হয়েছে
+          validator: validator,
           decoration: InputDecoration(
             filled: true,
             fillColor: Colors.white,
@@ -316,7 +326,6 @@ class _SignupPageState extends State<SignupPage> {
             prefixIcon: Icon(icon, size: 20),
             prefixIconConstraints: const BoxConstraints(minWidth: 40),
             suffixIcon: isPass ? GestureDetector(onTap: onTap, child: Icon(obs ? Icons.visibility_off : Icons.visibility, size: 20)) : null,
-            // সাধারণ অবস্থার বর্ডার ডিজাইন
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.shade200),
@@ -325,7 +334,6 @@ class _SignupPageState extends State<SignupPage> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF2D5A27)),
             ),
-            // যখন এরর বা ভুল ইনপুট আসবে তখন এই ডিজাইনটি শো করবে
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Colors.redAccent, width: 1),
@@ -352,7 +360,7 @@ class _SignupPageState extends State<SignupPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(assetPath, height: 20),
+          Image.asset(assetPath, height: 20, errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 20)),
           const SizedBox(width: 10),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
